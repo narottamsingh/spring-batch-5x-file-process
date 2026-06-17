@@ -6,8 +6,6 @@ on:
 jobs:
   generate-token:
     runs-on: ubuntu-latest
-    outputs:
-      token: ${{ steps.app-token.outputs.token }}
     steps:
       - name: Generate GitHub App Token
         id: app-token
@@ -16,9 +14,36 @@ jobs:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
+      - name: Validate Token
+        run: |
+          TOKEN="${{ steps.app-token.outputs.token }}"
+          
+          if [ -z "$TOKEN" ]; then
+            echo "❌ ERROR: Token generation failed!"
+            exit 1
+          fi
+          
+          echo "✅ Token generated successfully"
+          echo "Token length: ${#TOKEN}"
+
+      - name: Create GitHub Secret (Token)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = "${{ steps.app-token.outputs.token }}";
+            
+            if (!token) {
+              throw new Error("❌ Token is empty!");
+            }
+            
+            // Store token in GitHub environment (only available during this workflow run)
+            core.setSecret(token);
+            core.exportVariable('APP_TOKEN', token);
+            
+            console.log("✅ Token exported as APP_TOKEN");
+            console.log("Token length: " + token.length);
+
       - name: Display Token Info
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           echo "✅ GitHub App Token generated successfully"
           echo "Token can be used for API calls and GitHub operations"
@@ -30,34 +55,53 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Validate Token
-        env:
-          GH_TOKEN: ${{ needs.generate-token.outputs.token }}
+      - name: Retrieve Token from Workflow
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Get token from workflow context
+            const token = "${{ needs.generate-token.outputs.token }}";
+            
+            if (!token) {
+              throw new Error("❌ Token is empty or not passed!");
+            }
+            
+            core.setSecret(token);
+            core.exportVariable('APP_TOKEN', token);
+            
+            console.log("✅ Token retrieved successfully");
+            console.log("Token length: " + token.length);
+
+      - name: Validate Token Received
         run: |
-          echo "🔍 Validating Token..."
-          if [ -z "$GH_TOKEN" ]; then
-            echo "❌ ERROR: Token is empty or not available!"
-            echo "Token value: '$GH_TOKEN'"
+          if [ -z "${{ env.APP_TOKEN }}" ]; then
+            echo "❌ ERROR: Token not available!"
             exit 1
           fi
-          echo "✅ Token is valid and available"
-          echo "Token length: ${#GH_TOKEN}"
+          
+          echo "✅ Token is available"
+          echo "Token length: ${#APP_TOKEN}"
+
       - name: Generate Report with Token
         env:
-          GH_TOKEN: ${{ needs.generate-token.outputs.token }}
+          GH_TOKEN: ${{ env.APP_TOKEN }}
         run: |
           echo "🔧 Report Generation Job"
           echo "Using GH_TOKEN from generate-token job"
-          echo "Token is available: ${#GH_TOKEN}"
+          echo "Token length: ${#GH_TOKEN}"
+          
+          if [ -z "$GH_TOKEN" ]; then
+            echo "❌ ERROR: Token not available!"
+            exit 1
+          fi
           
           # Example: Use token for API calls
-          # gh api user
+          # gh api user --jq '.login'
           
           echo "✅ Report generated successfully"
 
       - name: Display Report Info
-        env:
-          GH_TOKEN: ${{ needs.generate-token.outputs.token }}
         run: |
           echo "📊 Report Details"
           echo "Using authenticated GitHub operations"
+          echo "Token length: ${#APP_TOKEN}"
