@@ -30,6 +30,18 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Validate Token
+        env:
+          GH_TOKEN: ${{ needs.generate-token.outputs.token }}
+        run: |
+          echo "🔍 Validating Token..."
+          if [ -z "$GH_TOKEN" ]; then
+            echo "❌ ERROR: Token is empty or not available!"
+            echo "Token value: '$GH_TOKEN'"
+            exit 1
+          fi
+          echo "✅ Token is valid and available"
+          echo "Token length: ${#GH_TOKEN}"
       - name: Generate Report with Token
         env:
           GH_TOKEN: ${{ needs.generate-token.outputs.token }}
