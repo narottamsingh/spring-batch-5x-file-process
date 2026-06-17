@@ -1,4 +1,4 @@
-name: Generate App Token
+name: Generate App Token For other steps
 
 on:
   workflow_dispatch:
